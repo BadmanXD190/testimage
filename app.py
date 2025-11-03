@@ -1,35 +1,39 @@
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"  # helps avoid rare CPU segfaults
+
 import streamlit as st
 import numpy as np
 import cv2
 from PIL import Image, ImageOps
-from keras.models import load_model
 from streamlit_webrtc import webrtc_streamer, WebRtcMode, RTCConfiguration
 import av
-import os
 
 st.set_page_config(page_title="Realtime Webcam + Keras", layout="centered")
-st.title("Realtime Webcam Classification (Keras)")
+st.title("Realtime Webcam Classification with Keras")
 
-# --- paths ---
 MODEL_PATH = os.getenv("MODEL_PATH", "keras_model.h5")
 LABELS_PATH = os.getenv("LABELS_PATH", "labels.txt")
 TARGET_SIZE = (224, 224)
 
-# --- cache loaders ---
 @st.cache_resource
 def load_keras_model():
-    return load_model(MODEL_PATH, compile=False)
+    # IMPORT HERE (lazy) so TF loads after the app is up
+    import tensorflow as tf
+    from tensorflow import keras
+    return keras.models.load_model(MODEL_PATH, compile=False)
 
 @st.cache_data
 def load_labels():
     with open(LABELS_PATH, "r", encoding="utf-8") as f:
-        # If your labels file has "0 ClassName" style, strip the index
         out = []
         for ln in f.readlines():
             ln = ln.strip()
             parts = ln.split(" ", 1)
             out.append(parts[1] if len(parts) == 2 and parts[0].isdigit() else ln)
         return out
+
 
 # Try to load model/labels and show helpful hints if missing
 model, labels = None, []
@@ -96,3 +100,4 @@ webrtc_streamer(
     video_frame_callback=video_frame_callback,
     media_stream_constraints={"video": True, "audio": False},
 )
+
