@@ -18,11 +18,30 @@ LABELS_PATH = os.getenv("LABELS_PATH", "labels.txt")
 TARGET_SIZE = (224, 224)
 
 @st.cache_resource
+@st.cache_resource
 def load_keras_model():
-    # IMPORT HERE (lazy) so TF loads after the app is up
     import tensorflow as tf
     from tensorflow import keras
-    return keras.models.load_model(MODEL_PATH, compile=False)
+    from keras.layers import DepthwiseConv2D
+
+    # Shim: drop unknown "groups" argument from older saved configs
+    class DepthwiseConv2DCompat(DepthwiseConv2D):
+        def __init__(self, *args, **kwargs):
+            kwargs.pop("groups", None)
+            super().__init__(*args, **kwargs)
+
+    # Also handle legacy ReLU6 if your model used MobileNet-style ops
+    def relu6(x):
+        return keras.activations.relu(x, max_value=6)
+
+    custom_objects = {
+        "DepthwiseConv2D": DepthwiseConv2DCompat,
+        "relu6": relu6,                # harmless if unused
+        "tf": tf,                      # sometimes referenced in Lambda layers
+    }
+
+    return keras.models.load_model("keras_model.h5", compile=False, custom_objects=custom_objects)
+
 
 @st.cache_data
 def load_labels():
@@ -100,4 +119,5 @@ webrtc_streamer(
     video_frame_callback=video_frame_callback,
     media_stream_constraints={"video": True, "audio": False},
 )
+
 
